@@ -29,11 +29,14 @@ System_Boundary(novamarket, "") {
    Component(s3, "S3 хранилище картинок", "")
    Component(elasticsearch, "Elasticsearch", "поиск и фильтрация товаров")
    SystemQueue(kafka, "Kafka Cluster", "изменения оценки товара\nсоздание и модерация отзывов\nизменение статуса заказа")
+   ContainerDb(eventStoreDB, "EventStoreDB", "агрегатор событий")
+   Component(eventStoreDB_consumer, "EventStoreDB консюмер", "читает топики kafka и транслирует в EventStoreDB")
 }
 System_Ext(notification_ext, "sms/push/email", "")
 System_Ext(pays_ext, "системы платежей", "")
 
-
+Rel(kafka, eventStoreDB_consumer, "use")
+Rel(eventStoreDB_consumer, eventStoreDB, "use")
 Rel(api_gateway, api_provider, "use")
 Rel(api_gateway, bff_catalog, "use")
 Rel(api_gateway, bff_basket, "use")
@@ -58,6 +61,7 @@ Rel(basket, order, "создать заказ")
 Rel(order, kafka, "отправка уведомлений\nобработка заказа")
 Rel(order, kafka, "обработка платежа")
 Rel(order, kafka, "оформление доставки")
+Rel(order, eventStoreDB, "история заказов")
 Rel(reviews, kafka, "создание отзыва")
 Rel(catalog, kafka, "оценка товара\nрезервирование")
 Rel(delivery, kafka, "статус доставки")
