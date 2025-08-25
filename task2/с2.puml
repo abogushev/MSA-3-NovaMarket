@@ -1,0 +1,71 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+' каждый из доменных сервисов использует Postgres, не стал отрисовывать чтобы не загромаждать картинку
+
+System_Boundary(novamarket, "") {
+' внешний слой
+  Component(web, "Web", "rest api")
+  Component(mobile, "Mobile app", "rest api")
+  Component(api_integrators, "API Integrators", "rest api")
+  Component(api_gateway, "API-Gateway", "авторизация/прокси до bffs")
+
+' BFFs
+  Component(bff_catalog, "BFF каталог товаров", "")
+  Component(bff_basket, "BFF корзина", "")
+  Component(bff_order, "BFF заказов", "")
+  Component(api_provider, "API провайдер\n для внешних систем", "")
+
+' сервисы-домены
+  Component(catalog, "Каталог товаров", "название, описание, цена, остаток, рейтинг")
+  Component(basket, "Корзина", "корзина выбранных товаров, точка входа в оформление заказа")
+  Component(reviews, "Отзывы", "хранение, модерация и отдача отзывов")
+  Component(order, "Заказы", "оформление заказа, детальная инфромация о текущих и прошлых заказах, статус текущих")
+  Component(delivery, "Логистика заказов", "оформление и обработка доставки заказов")
+  Component(notification, "Сервис уведомлений", "интеграция с внешними системами уведомлений")
+  Component(pays, "Сервис оплаты", "проведение оплаты, хранение истории платежей")
+
+'  вспомогательные серисы
+   Component(s3, "S3 хранилище картинок", "")
+   Component(elasticsearch, "Elasticsearch", "поиск и фильтрация товаров")
+   SystemQueue(kafka, "Kafka Cluster", "изменения оценки товара\nсоздание и модерация отзывов\nизменение статуса заказа")
+   ContainerDb(eventStoreDB, "EventStoreDB", "агрегатор событий")
+   Component(eventStoreDB_consumer, "EventStoreDB консюмер", "читает топики kafka и транслирует в EventStoreDB")
+}
+System_Ext(notification_ext, "sms/push/email", "")
+System_Ext(pays_ext, "системы платежей", "")
+
+Rel(kafka, eventStoreDB_consumer, "use")
+Rel(eventStoreDB_consumer, eventStoreDB, "use")
+Rel(api_gateway, api_provider, "use")
+Rel(api_gateway, bff_catalog, "use")
+Rel(api_gateway, bff_basket, "use")
+Rel(api_gateway, bff_order, "use")
+Rel(web, api_gateway, "use")
+Rel(mobile, api_gateway, "use")
+Rel(api_integrators, api_gateway, "use")
+Rel(notification, notification_ext, "use")
+Rel(pays, pays_ext, "use")
+Rel(bff_catalog, catalog, "use")
+Rel(bff_basket, basket, "use")
+Rel(bff_order, order, "use")
+Rel(api_provider, catalog, "use")
+Rel(api_provider, basket, "use")
+Rel(api_provider, order, "use")
+
+Rel(catalog, elasticsearch, "use")
+Rel(catalog, s3, "use")
+Rel(bff_catalog, reviews, "use")
+Rel(basket, order, "создать заказ")
+
+Rel(order, kafka, "отправка уведомлений\nобработка заказа")
+Rel(order, kafka, "обработка платежа")
+Rel(order, kafka, "оформление доставки")
+Rel(order, eventStoreDB, "история заказов")
+Rel(reviews, kafka, "создание отзыва")
+Rel(catalog, kafka, "оценка товара\nрезервирование")
+Rel(delivery, kafka, "статус доставки")
+Rel(pays, kafka, "оплата")
+Rel(notification, kafka, "уведомления")
+
+@enduml

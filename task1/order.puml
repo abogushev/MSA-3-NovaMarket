@@ -1,0 +1,53 @@
+@startuml
+'тут скрыто взаимодействие web с сервисами сatalog и basket для простоты восприятия, т.к рассматриваем только формирование заказа
+'для упрощения все события передаются через kafka, поэтому для экономии места передача события будет показана от сервиса к сервису
+customer->web: - поиск товара\n- добавление товара в карзину\n- оформление заказа
+web->basket: создать заказ
+basket->order: создать заказ
+order->order: сохраняет детали заказа
+order->basket:  id заказа
+basket->web:  id заказа
+web <--> order: получить статус заказа (sse, long pull)
+order-->catalog: OrderCreatedEvent
+catalog->catalog: зарезервировать заказ
+
+alt резервирование не успешно
+    catalog-->order: ItemsReserveFailedEvent
+    order->order: заказ отменен
+else резервирование успешно
+    catalog->pays: ItemsReserveSuccessEvent
+    catalog->order: ItemsReserveSuccessEvent
+    order->order: Ожидает оплаты
+    pays->pays: списать средства
+        alt списание не успешно
+            pays-->catalog: PayFailedEvent
+            catalog->catalog: отмена резервирования
+            catalog-->order: ItemsReserveCanceledEvent
+            order->order: заказ отменен
+        else списание успешно
+            pays-->order: PaySuccessEvent
+            order->order: смена статуса заказа: Оплачен, готовится к отправке
+            pays-->delivery: PaySuccessEvent
+            delivery->delivery: оформить доставку\n(отправить уведомление продавцу)
+            delivery-->order: DeliveryOrderCreatedEvent
+            order->order: смена статуса заказа: Передан в доставку (+трек-номер)
+            note over delivery: доставка заказа покупателю
+            delivery-->order: смена статуса заказа: заказ доставлен
+        end
+end
+
+alt отмена заказа
+customer -> web: отмена заказа
+web -> order: отмена заказа
+order --> pays: OrderCanceledEvent
+pays->pays: возврат средств
+pays-->order: MoneyReturnedEvent
+order->order: смена статуса заказа: возврат завершен
+order --> delivery: OrderCanceledEvent
+delivery -> delivery: товары возвращаются из доставки на склад
+delivery --> catalog: ItemsReturnedToWarehouseEvent
+catalog -> catalog: восстановление кол-ва товара
+end
+
+
+@enduml
